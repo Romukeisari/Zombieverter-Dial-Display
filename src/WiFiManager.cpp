@@ -228,6 +228,8 @@ bool WiFiManager::init(CANDataManager* canManager) {
 void WiFiManager::startAP() {
     if (active) return;
 
+    Serial.printf("[WiFi] Heap before AP: %u free, %u largest block\n",
+                  (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
     WiFi.mode(WIFI_AP);
     WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
     vTaskDelay(pdMS_TO_TICKS(100)); // let AP stabilize before starting server
@@ -241,6 +243,8 @@ void WiFiManager::startAP() {
     }
 
     startServer();
+    Serial.printf("[WiFi] Heap after AP:  %u free, %u largest block\n",
+                  (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
     // Don't auto-start GVRET — user must click "Start GVRET" button in web UI
     // GVRETServer::getInstance().begin();
     active = true;

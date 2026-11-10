@@ -34,11 +34,21 @@ bool UIManager::init(CANDataManager* canMgr, Immobilizer* immob) {
     
     lv_init();
     
+#if defined(BOARD_CYD)
+    // Classic ESP32 has far less free heap than the S3 once WiFi is up, and
+    // the flush is blocking, so one small draw buffer is enough.
+    size_t buffer_size = SCREEN_WIDTH * 20;
+    buf1 = (lv_color_t*)heap_caps_malloc(buffer_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    buf2 = nullptr;
+
+    if (!buf1) {
+#else
     size_t buffer_size = SCREEN_WIDTH * 40;
     buf1 = (lv_color_t*)heap_caps_malloc(buffer_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     buf2 = (lv_color_t*)heap_caps_malloc(buffer_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     
     if (!buf1 || !buf2) {
+#endif
         Serial.println("ERROR: Failed to allocate LVGL buffers!");
         return false;
     }

@@ -34,7 +34,12 @@
 #define LV_MEM_CUSTOM 0
 #if LV_MEM_CUSTOM == 0
     /* Size of the memory available for `lv_mem_alloc()` in bytes (>= 2kB) */
-    #define LV_MEM_SIZE (64U * 1024U)          /*[bytes]*/
+    #if defined(BOARD_CYD)
+        /* The UI uses about 30K; the classic ESP32 needs the rest of the heap for WiFi */
+        #define LV_MEM_SIZE (44U * 1024U)      /*[bytes]*/
+    #else
+        #define LV_MEM_SIZE (64U * 1024U)      /*[bytes]*/
+    #endif
 
     /* Set an address for the memory pool instead of allocating it as a normal array. Can be in external SRAM too. */
     #define LV_MEM_ADR 0     /*0: unused*/
