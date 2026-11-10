@@ -474,6 +474,11 @@ void networkTask(void* pvParameters) {
 // ============================================================================
 
 void setup() {
+    #if defined(BOARD_CYD) && !DEBUG_SERIAL
+    // The CYD logs over a hardware UART, which prints nothing until begin()
+    // (the Dial's native USB serial works without it).
+    Serial.begin(115200);
+    #endif
     #if DEBUG_SERIAL
     Serial.begin(115200);
     vTaskDelay(pdMS_TO_TICKS(1000));

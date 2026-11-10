@@ -4,16 +4,41 @@
 #include <Arduino.h>
 
 // ============================================
-// M5Stack Dial Hardware Configuration
+// Hardware Configuration
 // ============================================
 
-// Display Configuration
+// UI canvas — the dial UI is always laid out for 240x240. On the CYD it sits
+// at the top-left of the 320x240 panel; the rest holds the on-screen keys.
 #define SCREEN_WIDTH        240
 #define SCREEN_HEIGHT       240
-#define SCREEN_IS_ROUND     true
 #define SCREEN_CENTER_X     120
 #define SCREEN_CENTER_Y     120
 #define SCREEN_RADIUS       120
+
+#if defined(BOARD_CYD)
+// --------------------------------------------
+// ESP32-2432S028 "Cheap Yellow Display"
+// --------------------------------------------
+#define SCREEN_IS_ROUND     false
+
+// No encoder: the BOOT button acts as the push button, and the on-screen
+// PREV / OK / NEXT keys (BoardCYD.h) cover rotation and click.
+#define ENCODER_BUTTON      0
+
+// CAN transceiver (e.g. SN65HVD230) on the CN1 connector: GND, IO22, IO27, 3V3
+#define CAN_TX_PIN          27
+#define CAN_RX_PIN          22
+
+// RGB LED, active low
+#define LED_PIN_R           4
+#define LED_PIN_G           16
+#define LED_PIN_B           17
+
+#else
+// --------------------------------------------
+// M5Stack Dial
+// --------------------------------------------
+#define SCREEN_IS_ROUND     true
 
 // Encoder Pins (Built-in on M5Stack Dial)
 #define ENCODER_PIN_A       41  // Swapped with PIN_B
@@ -35,6 +60,8 @@
 // Power & LED
 #define POWER_HOLD_PIN      46
 #define LED_PIN             21
+
+#endif // BOARD_CYD
 
 // ============================================
 // WiFi Configuration

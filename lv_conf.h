@@ -42,6 +42,12 @@
     #if LV_MEM_ADR == 0
         //#define LV_MEM_POOL_INCLUDE your_alloc_library  /* Uncomment if using an external allocator */
         //#define LV_MEM_POOL_ALLOC   your_alloc          /* Uncomment if using an external allocator */
+        /* Classic ESP32 (CYD): a 64K static pool overflows the DRAM segment the
+         * linker has for .bss, so take the pool from the heap at lv_init() instead. */
+        #if defined(BOARD_CYD)
+            #define LV_MEM_POOL_INCLUDE <stdlib.h>
+            #define LV_MEM_POOL_ALLOC   malloc
+        #endif
     #endif
 
 #else       /*LV_MEM_CUSTOM*/

@@ -134,6 +134,25 @@ pio run -e m5stack-dial --target uploadfs
 
 See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for full details.
 
+### Cheap Yellow Display (ESP32-2432S028)
+
+The same firmware also builds for the "CYD". Use `-e cyd` for the original
+single-USB board (ILI9341) or `-e cyd2usb` for the two-USB board (ST7789):
+
+```bash
+pio run -e cyd2usb --target upload
+pio run -e cyd2usb --target uploadfs
+```
+
+- The 240x240 dial UI is drawn on the left of the 320x240 screen. Three touch
+  keys on the right replace the encoder: **PREV** / **NEXT** rotate (hold to
+  repeat) and **OK** is the button (double-tap = double-click, hold =
+  long-press). The BOOT button also works as the push button.
+- CAN transceiver (SN65HVD230 or similar) on connector **CN1**: IO27 = TX,
+  IO22 = RX, plus 3V3 and GND.
+- No RFID reader, so the immobilizer unlocks by PIN only.
+- 4MB flash layout is in `partitions_4mb.csv`.
+
 ---
 
 ## No CAN Map Required

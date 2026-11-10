@@ -5,7 +5,6 @@
 #include <LittleFS.h>
 #include <esp_heap_caps.h>
 #include "FaultLogger.h"
-#include <M5GFX.h>
 
 // Static instance for callbacks
 extern bool wifiMode;
@@ -124,10 +123,10 @@ void UIManager::resetWifiScreen() {
 void UIManager::lvgl_flush_cb(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_p) {
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
-    M5.Display.startWrite();
-    M5.Display.setAddrWindow(area->x1, area->y1, w, h);
-    M5.Display.pushPixels((uint16_t*)&color_p->full, w * h, true);
-    M5.Display.endWrite();
+    BOARD_DISPLAY.startWrite();
+    BOARD_DISPLAY.setAddrWindow(area->x1, area->y1, w, h);
+    BOARD_DISPLAY.pushPixels((uint16_t*)&color_p->full, w * h, true);
+    BOARD_DISPLAY.endWrite();
     lv_disp_flush_ready(disp);
 }
 
@@ -359,7 +358,7 @@ void UIManager::createSplashScreen() {
         lv_obj_align(title, LV_ALIGN_CENTER, 0, -30);
 
         lv_obj_t* subtitle = lv_label_create(screens[SCREEN_SPLASH]);
-        lv_label_set_text(subtitle, "M5Dial Display");
+        lv_label_set_text(subtitle, BOARD_NAME);
         lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_16, 0);
         lv_obj_set_style_text_color(subtitle, lv_palette_lighten(LV_PALETTE_CYAN, 2), 0);
         lv_obj_align(subtitle, LV_ALIGN_CENTER, 0, 4);

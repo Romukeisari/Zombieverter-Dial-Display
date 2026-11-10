@@ -2,8 +2,11 @@
 #define INPUT_MANAGER_H
 
 #include <Arduino.h>
-#include <ESP32Encoder.h>
 #include <OneButton.h>
+#include "Board.h"
+#if BOARD_HAS_ENCODER
+#include <ESP32Encoder.h>
+#endif
 
 enum InputEventType {
     INPUT_NONE,
@@ -50,7 +53,21 @@ public:
     void setOnTouchTap(void (*callback)(uint16_t x, uint16_t y));
     
 private:
+#if BOARD_HAS_ENCODER
     ESP32Encoder encoder;
+#else
+    // On-screen PREV / OK / NEXT keys stand in for the encoder and its button
+    int32_t  softPosition   = 0;      // virtual encoder position, in detents
+    bool     touchRaw       = false;  // panel state before debouncing
+    uint32_t touchRawSince  = 0;
+    uint8_t  activeKey      = 0;      // SoftKey being held; SOFTKEY_NONE = touch is on the UI
+    uint32_t keyRepeatAt    = 0;      // next auto-repeat while PREV/NEXT is held
+    bool     okLongFired    = false;
+    bool     okClickPending = false;  // waiting to see if a second OK tap follows
+    uint32_t okClickTime    = 0;
+
+    void emitEncoder(int32_t delta);
+#endif
     OneButton button;
     
     int32_t lastEncoderPosition;

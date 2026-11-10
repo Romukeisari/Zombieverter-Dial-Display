@@ -2,7 +2,7 @@
 #define UIMANAGER_LVGL_H
 
 #include <Arduino.h>
-#include <M5Unified.h>
+#include "Board.h"
 #include <lvgl.h>
 #include "CANData.h"
 #include "Config.h"

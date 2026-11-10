@@ -1,6 +1,5 @@
 #include "InputManager.h"
 #include "Config.h"
-#include <M5Unified.h>
 
 InputManager* InputManager::instance = nullptr;
 
@@ -17,11 +16,13 @@ InputManager::InputManager()
 }
 
 bool InputManager::init() {
+#if BOARD_HAS_ENCODER
     // Initialize encoder
     ESP32Encoder::useInternalWeakPullResistors = puType::up;
     encoder.attachFullQuad(ENCODER_PIN_A, ENCODER_PIN_B);
     encoder.clearCount();
     encoder.setCount(0);
+#endif
     lastEncoderPosition = 0;
     
     // Initialize button
@@ -41,8 +42,9 @@ bool InputManager::init() {
 void InputManager::update() {
     // Update button
     button.tick();
-    
-    // Check encoder with sensitivity adjustment
+
+#if BOARD_HAS_ENCODER
+    // Check encoderwith sensitivity adjustment
     // The encoder is in 4x quadrature mode, so divide by 4 for proper sensitivity
     int32_t rawPosition = encoder.getCount();
     int32_t currentPosition = rawPosition / 4;  // Divide by 4 to get actual detent clicks
@@ -75,10 +77,139 @@ void InputManager::update() {
             onEncoderRotate(delta);
         }
     }
-    
+#endif // BOARD_HAS_ENCODER
+
     // Check touch
     checkTouch();
 }
+
+#if defined(BOARD_CYD)
+
+// One detent of virtual encoder rotation from the PREV / NEXT keys
+void InputManager::emitEncoder(int32_t delta) {
+    softPosition += delta;
+    lastEncoderPosition = softPosition;
+
+    InputEvent event;
+    event.type = (delta > 0) ? INPUT_ENCODER_CW : INPUT_ENCODER_CCW;
+    event.encoderDelta = delta;
+    event.timestamp = millis();
+    enqueueEvent(event);
+
+    if (onEncoderRotate) {
+        onEncoderRotate(delta);
+    }
+}
+
+// Resistive panel: touches on the 240x240 UI become the same press/release/tap
+// events the Dial produces; touches on the key strip become encoder steps
+// (PREV/NEXT, auto-repeating while held) and button click / double-click /
+// long-press (OK), with the same timings OneButton uses for the real button.
+void InputManager::checkTouch() {
+    static const uint32_t DEBOUNCE_MS     = 30;
+    static const uint32_t REPEAT_DELAY_MS = 500;
+    static const uint32_t REPEAT_MS       = 150;
+    static const uint32_t LONG_PRESS_MS   = 800;
+    static const uint32_t CLICK_MS        = 250;
+
+    uint32_t now = millis();
+    uint16_t x = 0, y = 0;
+    bool down = CYD::readTouch(&x, &y);
+
+    if (down != touchRaw) {
+        touchRaw = down;
+        touchRawSince = now;
+    }
+    // Keep following the finger until the press is accepted, so the position
+    // used is the settled one rather than the first noisy sample
+    if (down && !touchPressed) {
+        lastTouchX = x;
+        lastTouchY = y;
+    }
+
+    if (touchRaw != touchPressed && now - touchRawSince >= DEBOUNCE_MS) {
+        touchPressed = touchRaw;
+
+        if (touchPressed) {
+            touchPressTime = now;
+            activeKey = CYD::softKeyAt(lastTouchX, lastTouchY);
+
+            #if DEBUG_TOUCH
+            Serial.printf("Touch press: %d, %d key=%d\n", lastTouchX, lastTouchY, activeKey);
+            #endif
+
+            if (activeKey == SOFTKEY_NONE) {
+                InputEvent event;
+                event.type = INPUT_TOUCH_PRESS;
+                event.touchX = lastTouchX;
+                event.touchY = lastTouchY;
+                event.timestamp = now;
+                enqueueEvent(event);
+                if (onTouchPress) {
+                    onTouchPress(lastTouchX, lastTouchY);
+                }
+            } else {
+                CYD::drawSoftKeys((SoftKey)activeKey);
+                if (activeKey == SOFTKEY_OK) {
+                    okLongFired = false;
+                } else {
+                    emitEncoder(activeKey == SOFTKEY_NEXT ? 1 : -1);
+                    keyRepeatAt = now + REPEAT_DELAY_MS;
+                }
+            }
+        } else {
+            if (activeKey == SOFTKEY_NONE) {
+                InputEvent event;
+                event.type = INPUT_TOUCH_RELEASE;
+                event.touchX = lastTouchX;
+                event.touchY = lastTouchY;
+                event.timestamp = now;
+                enqueueEvent(event);
+
+                if (now - touchPressTime < 500) {
+                    InputEvent tapEvent = event;
+                    tapEvent.type = INPUT_TOUCH_TAP;
+                    enqueueEvent(tapEvent);
+                    if (onTouchTap) {
+                        onTouchTap(lastTouchX, lastTouchY);
+                    }
+                }
+            } else {
+                if (activeKey == SOFTKEY_OK && !okLongFired) {
+                    if (okClickPending) {
+                        okClickPending = false;
+                        buttonDoubleClickCallback();
+                    } else {
+                        okClickPending = true;
+                        okClickTime = now;
+                    }
+                }
+                activeKey = SOFTKEY_NONE;
+                CYD::drawSoftKeys(SOFTKEY_NONE);
+            }
+        }
+    }
+
+    if (touchPressed) {
+        if (activeKey == SOFTKEY_PREV || activeKey == SOFTKEY_NEXT) {
+            if ((int32_t)(now - keyRepeatAt) >= 0) {
+                emitEncoder(activeKey == SOFTKEY_NEXT ? 1 : -1);
+                keyRepeatAt = now + REPEAT_MS;
+            }
+        } else if (activeKey == SOFTKEY_OK && !okLongFired &&
+                   now - touchPressTime >= LONG_PRESS_MS) {
+            okLongFired = true;
+            okClickPending = false;
+            buttonLongPressCallback();
+        }
+    } else if (okClickPending && now - okClickTime >= CLICK_MS) {
+        // No second tap arrived, so it was a single click
+        okClickPending = false;
+        buttonClickCallback();
+    }
+}
+
+#else // M5Stack Dial
 
 void InputManager::checkTouch() {
     // NOTE: M5.update() is called by Hardware::update() in the main loop.
@@ -139,6 +270,8 @@ void InputManager::checkTouch() {
     }
 }
 
+#endif // BOARD_CYD
+
 bool InputManager::hasEvent() {
     return eventHead != eventTail;
 }
@@ -151,12 +284,20 @@ InputEvent InputManager::getNextEvent() {
 }
 
 int32_t InputManager::getEncoderPosition() {
+#if BOARD_HAS_ENCODER
     return encoder.getCount();
+#else
+    return softPosition * 4;   // same 4-counts-per-detent scale as the real encoder
+#endif
 }
 
 void InputManager::resetEncoderPosition() {
+#if BOARD_HAS_ENCODER
     encoder.clearCount();
     encoder.setCount(0);
+#else
+    softPosition = 0;
+#endif
     lastEncoderPosition = 0;
 }
 

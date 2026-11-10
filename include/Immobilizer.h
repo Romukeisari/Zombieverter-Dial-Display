@@ -2,10 +2,9 @@
 #define IMMOBILIZER_H
 
 #include <Arduino.h>
-#include <M5Unified.h>
+#include "Board.h"
 #include <Preferences.h>
 #include <functional>
-#include "MFRC522.h"
 #include "Config.h"
 #include "SDOManager.h"
 
@@ -14,7 +13,11 @@
 // Uses arozcan I2C MFRC522 fork in lib/MFRC522/
 // Call rfid.begin() after M5.begin() — begin() calls PCD_Init() internally.
 // ============================================================================
-#define RFID_ENABLED true
+// Boards without the reader (BOARD_HAS_RFID 0) unlock by PIN only.
+#define RFID_ENABLED BOARD_HAS_RFID
+#if RFID_ENABLED
+#include "MFRC522.h"
+#endif
 
 // ============================================================================
 // VCU DriveInhibit parameter IDs
@@ -229,7 +232,9 @@ private:
     std::function<void(const char*)> onWarningCb;
 
     // RFID object — I2C address 0x28, uses M5.In_I2C internally
+#if RFID_ENABLED
     MFRC522 rfid = MFRC522(RC522_I2C_ADDRESS);
+#endif
 };
 
 #endif // IMMOBILIZER_H

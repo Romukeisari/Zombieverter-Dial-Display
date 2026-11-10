@@ -1,7 +1,7 @@
 #ifndef HARDWARE_H
 #define HARDWARE_H
 
-#include <M5Unified.h>
+#include "Board.h"
 #include <Arduino.h>
 #include "Config.h"
 
