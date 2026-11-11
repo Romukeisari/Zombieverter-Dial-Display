@@ -26,6 +26,9 @@
 #include <ESPmDNS.h>
 #include <ESPAsyncWebServer.h>
 #include <Update.h>
+#if defined(BOARD_CYD)
+static void resetFileSendLimiter();
+#endif
 #include <LittleFS.h>
 #include <FS.h>
 #include <ArduinoJson.h>
@@ -642,6 +645,9 @@ void WiFiManager::startServer() {
 // ---------------------------------------------------------------------------
 void WiFiManager::stopServer() {
     if (!serverStarted || !server) return;
+#if defined(BOARD_CYD)
+    resetFileSendLimiter();
+#endif
     server->end();
     delete server;
     server = nullptr;
@@ -978,11 +984,64 @@ String WiFiManager::getContentType(const String& filename) {
     return "text/plain";
 }
 
+#if defined(BOARD_CYD)
+// ---------------------------------------------------------------------------
+// File send limiter (CYD only)
+//
+// A desktop browser fetches a page's scripts over six connections at once.
+// Each in-flight file response ties up roughly 9 KB of heap (TCP send buffer
+// plus response buffers), and the classic ESP32 has only ~60 KB free with
+// WiFi up. When the heap runs dry the WiFi driver cannot allocate receive
+// buffers, ACKs are lost, nothing is ever freed and the network locks up.
+//
+// So only a couple of files are sent at a time; further requests are paused
+// (the connection stays open, costing very little) and resumed in order as
+// earlier sends finish. Everything here runs on the async_tcp task.
+// ---------------------------------------------------------------------------
+#include <deque>
+
+static const uint8_t MAX_FILE_SENDS = 2;
+
+struct PendingFileSend {
+    AsyncWebServerRequestPtr request;
+    String path;
+};
+
+static uint8_t s_fileSends = 0;
+static std::deque<PendingFileSend> s_pendingFileSends;
+
+static void resetFileSendLimiter() {
+    s_fileSends = 0;
+    s_pendingFileSends.clear();
+}
+#endif
+
 // Serve file from LittleFS — tries .gz version first
 // Called from onNotFound catch-all
 bool WiFiManager::serveFile(AsyncWebServerRequest* request, const String& overridePath) {
     String path = overridePath.length() > 0 ? overridePath : request->url();
     if (path == "/") path = "/index.html";
+
+#if defined(BOARD_CYD)
+    if (!LittleFS.exists(path + ".gz") && !LittleFS.exists(path)) return false;
+
+    if (s_fileSends >= MAX_FILE_SENDS) {
+        s_pendingFileSends.push_back({ request->pause(), path });
+        return true;
+    }
+    s_fileSends++;
+    request->onDisconnect([]() {
+        if (s_fileSends > 0) s_fileSends--;
+        // Start the next waiting request whose client is still there
+        while (s_fileSends < MAX_FILE_SENDS && !s_pendingFileSends.empty()) {
+            PendingFileSend next = s_pendingFileSends.front();
+            s_pendingFileSends.pop_front();
+            if (auto waiting = next.request.lock()) {
+                if (instance) instance->serveFile(waiting.get(), next.path);
+            }
+        }
+    });
+#endif
 
     // Try .gz first
     String gzPath = path + ".gz";
